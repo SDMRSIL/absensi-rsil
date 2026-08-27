@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laporan Absensi RSI</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f4f7f6; margin: 0; padding: 16px; }
+        .container { max-width: 1000px; margin: auto; }
+
+        /* ===== Layar Login ===== */
+        #layarLogin { max-width: 340px; margin: 80px auto; background: white; padding: 24px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); text-align: center; }
+        #layarLogin h2 { color: #0056b3; margin-top: 0; }
+        #layarLogin input { width: 100%; padding: 10px; font-size: 14px; border-radius: 5px; border: 1px solid #ccc; margin-bottom: 10px; }
+        #layarLogin button { width: 100%; padding: 12px; font-size: 15px; background: #0056b3; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #layarLogin button:hover { background: #003d82; }
+        #errorLogin { color: #dc3545; font-size: 13px; margin-top: 8px; min-height: 16px; }
+
+        /* ===== Layar Laporan ===== */
+        #layarLaporan { display: none; }
+        .header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+        .header img { width: 40px; }
+        .header h1 { font-size: 20px; color: #0056b3; margin: 0; }
+
+        .panel { background: white; padding: 16px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 16px; }
+        .filter-grid { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+        .filter-item { display: flex; flex-direction: column; gap: 4px; }
+        .filter-item label { font-size: 12px; color: #555; font-weight: bold; }
+        .filter-item input { padding: 8px; border-radius: 5px; border: 1px solid #ccc; font-size: 14px; }
+        .filter-btn { padding: 9px 16px; font-size: 14px; border: none; border-radius: 5px; cursor: pointer; color: white; }
+        #btnFilter { background: #0056b3; }
+        #btnFilter:hover { background: #003d82; }
+        #btnExport { background: #28a745; }
+        #btnExport:hover { background: #1e7e34; }
+        #btnReset { background: #6c757d; }
+        #btnReset:hover { background: #565e64; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; }
+        th { background: #f0f2f5; color: #333; position: sticky; top: 0; }
+        tr:hover { background: #f9fafb; }
+        .badge-masuk { color: #28a745; font-weight: bold; }
+        .badge-pulang { color: #dc3545; font-weight: bold; }
+        .badge-dinas { background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+        .foto-link { color: #0056b3; text-decoration: none; }
+        .table-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; }
+        #infoJumlah { font-size: 13px; color: #666; margin-bottom: 8px; }
+        #loadingLaporan { text-align: center; padding: 20px; color: #666; }
+    </style>
+</head>
+<body>
+
+    <!-- ===== LAYAR LOGIN ===== -->
+    <div id="layarLogin">
+        <h2>Laporan Absensi</h2>
+        <p style="font-size:13px; color:#666;">Khusus Staff SDM RS Islam Lumajang</p>
+        <input type="password" id="inputPassword" placeholder="Masukkan password akses">
+        <button onclick="cekLogin()">Masuk</button>
+        <p id="errorLogin"></p>
+    </div>
+
+    <!-- ===== LAYAR LAPORAN ===== -->
+    <div class="container" id="layarLaporan">
+        <div class="header">
+            <img src="https://raw.githubusercontent.com/SDMRSIL/logorsil/main/RSIB.png" alt="Logo RSIL">
+            <h1>Laporan Absensi Pegawai</h1>
+        </div>
+
+        <div class="panel">
+            <div class="filter-grid">
+                <div class="filter-item">
+                    <label>Dari Tanggal</label>
+                    <input type="date" id="fDariTanggal">
+                </div>
+                <div class="filter-item">
+                    <label>Sampai Tanggal</label>
+                    <input type="date" id="fSampaiTanggal">
+                </div>
+                <div class="filter-item">
+                    <label>NIP</label>
+                    <input type="text" id="fNik" placeholder="Cari NIP...">
+                </div>
+                <div class="filter-item">
+                    <label>Nama</label>
+                    <input type="text" id="fNama" placeholder="Cari nama...">
+                </div>
+                <button class="filter-btn" id="btnFilter" onclick="muatLaporan()">Terapkan Filter</button>
+                <button class="filter-btn" id="btnReset" onclick="resetFilter()">Reset</button>
+                <button class="filter-btn" id="btnExport" onclick="exportCSV()">Download Excel (CSV)</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <p id="infoJumlah"></p>
+            <div id="loadingLaporan">Memuat data...</div>
+            <div class="table-wrap">
+                <table id="tabelLaporan" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Jam</th>
+                            <th>Nama</th>
+                            <th>NIP</th>
+                            <th>Tipe</th>
+                            <th>Dinas Luar</th>
+                            <th>Lokasi</th>
+                            <th>Foto</th>
+                        </tr>
+                    </thead>
+                    <tbody id="isiTabel"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // GANTI DENGAN URL & KEY SUPABASE
+        // ==========================================
+        const supabaseUrl = 'https://ukjwvnutxpkyepbwvfix.supabase.co';
+        const supabaseKey = 'sb_publishable_9h2W6Lm4gN51dbflE81N5g_RM3FTyfG';
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        // ==========================================
+        // GANTI PASSWORD AKSES LAPORAN DI SINI
+        // ==========================================
+        const PASSWORD_AKSES = 'sdm12345';
+
+        let dataLaporan = [];
+
+        function cekLogin() {
+            const pass = document.getElementById('inputPassword').value;
+            const error = document.getElementById('errorLogin');
+            if (pass === PASSWORD_AKSES) {
+                document.getElementById('layarLogin').style.display = 'none';
+                document.getElementById('layarLaporan').style.display = 'block';
+                // Default filter: bulan berjalan
+                const now = new Date();
+                const awalBulan = new Date(now.getFullYear(), now.getMonth(), 1);
+                document.getElementById('fDariTanggal').value = formatTanggalInput(awalBulan);
+                document.getElementById('fSampaiTanggal').value = formatTanggalInput(now);
+                muatLaporan();
+            } else {
+                error.innerText = 'Password salah. Coba lagi.';
+            }
+        }
+
+        document.getElementById('inputPassword').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') cekLogin();
+        });
+
+        function formatTanggalInput(date) {
+            const yyyy = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const dd = String(date.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        // Konversi timestamp UTC ke tampilan WIB (DD/MM/YYYY dan HH:MM:SS)
+        function formatWaktuWIB(waktuUTC) {
+            const d = new Date(waktuUTC);
+            const opsi = { timeZone: 'Asia/Jakarta' };
+            const tgl = d.toLocaleDateString('id-ID', { ...opsi, day: '2-digit', month: '2-digit', year: 'numeric' });
+            const jam = d.toLocaleTimeString('id-ID', { ...opsi, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            return { tgl, jam };
+        }
+
+        async function muatLaporan() {
+            const loading = document.getElementById('loadingLaporan');
+            const tabel = document.getElementById('tabelLaporan');
+            loading.style.display = 'block';
+            loading.innerText = 'Memuat data...';
+            tabel.style.display = 'none';
+
+            const dari = document.getElementById('fDariTanggal').value;
+            const sampai = document.getElementById('fSampaiTanggal').value;
+            const nik = document.getElementById('fNik').value.trim();
+            const nama = document.getElementById('fNama').value.trim();
+
+            let query = supabaseClient.from('log_absensi').select('*').order('waktu', { ascending: false });
+
+            if (dari) query = query.gte('waktu', `${dari}T00:00:00+07:00`);
+            if (sampai) query = query.lte('waktu', `${sampai}T23:59:59+07:00`);
+            if (nik) query = query.ilike('nik', `%${nik}%`);
+            if (nama) query = query.ilike('nama', `%${nama}%`);
+
+            const { data, error } = await query;
+
+            if (error) {
+                loading.innerText = 'Gagal memuat data: ' + error.message;
+                return;
+            }
+
+            dataLaporan = data || [];
+            tampilkanTabel(dataLaporan);
+            loading.style.display = 'none';
+            tabel.style.display = 'table';
+        }
+
+        function tampilkanTabel(data) {
+            const isiTabel = document.getElementById('isiTabel');
+            const info = document.getElementById('infoJumlah');
+            isiTabel.innerHTML = '';
+
+            info.innerText = `Menampilkan ${data.length} data`;
+
+            data.forEach(row => {
+                const { tgl, jam } = formatWaktuWIB(row.waktu);
+                const tr = document.createElement('tr');
+
+                const tipeClass = row.tipe_absen === 'Masuk' ? 'badge-masuk' : 'badge-pulang';
+                const tipeLabel = row.tipe_absen === 'Masuk' ? 'Check In' : 'Check Out';
+                const dinasLabel = row.dinas_luar ? '<span class="badge-dinas">Dinas Luar</span>' : '-';
+                const lokasiLink = (row.lat && row.long)
+                    ? `<a class="foto-link" href="https://www.google.com/maps?q=${row.lat},${row.long}" target="_blank">Lihat Peta</a>`
+                    : '-';
+                const fotoLink = row.foto_url
+                    ? `<a class="foto-link" href="${row.foto_url}" target="_blank">Lihat Foto</a>`
+                    : '-';
+
+                tr.innerHTML = `
+                    <td>${tgl}</td>
+                    <td>${jam}</td>
+                    <td>${row.nama || '-'}</td>
+                    <td>${row.nik || '-'}</td>
+                    <td class="${tipeClass}">${tipeLabel}</td>
+                    <td>${dinasLabel}</td>
+                    <td>${lokasiLink}</td>
+                    <td>${fotoLink}</td>
+                `;
+                isiTabel.appendChild(tr);
+            });
+        }
+
+        function resetFilter() {
+            document.getElementById('fDariTanggal').value = '';
+            document.getElementById('fSampaiTanggal').value = '';
+            document.getElementById('fNik').value = '';
+            document.getElementById('fNama').value = '';
+            muatLaporan();
+        }
+
+        // Export data yang sedang ditampilkan ke file CSV (bisa dibuka di Excel)
+        function exportCSV() {
+            if (dataLaporan.length === 0) {
+                alert('Tidak ada data untuk diexport.');
+                return;
+            }
+
+            const header = ['Tanggal', 'Jam', 'Nama', 'NIP', 'Tipe Absen', 'Dinas Luar', 'Latitude', 'Longitude', 'URL Foto'];
+            const baris = dataLaporan.map(row => {
+                const { tgl, jam } = formatWaktuWIB(row.waktu);
+                const tipeLabel = row.tipe_absen === 'Masuk' ? 'Check In' : 'Check Out';
+                return [
+                    tgl, jam, row.nama || '', row.nik || '', tipeLabel,
+                    row.dinas_luar ? 'Ya' : 'Tidak',
+                    row.lat || '', row.long || '', row.foto_url || ''
+                ];
+            });
+
+            let csv = header.join(';') + '\n';
+            baris.forEach(b => {
+                csv += b.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';') + '\n';
+            });
+
+            // Tambahkan BOM supaya karakter khusus tampil benar di Excel
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const now = new Date();
+            a.href = url;
+            a.download = `laporan_absensi_${formatTanggalInput(now)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

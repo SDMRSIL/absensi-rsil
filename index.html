@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi RSI</title>
+    <!-- Supabase Client Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Leaflet (Maps) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; text-align: center; padding: 10px; background: #f4f7f6; margin: 0; }
+        .container { max-width: 380px; margin: auto; background: white; padding: 14px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+
+        .logo { width: 120px; height: auto; margin-bottom: 4px; }
+        h1.title { margin: 0 0 6px 0; font-size: 22px; letter-spacing: 2px; color: #0056b3; font-weight: 900; }
+
+        .hari-tanggal { display: flex; justify-content: center; align-items: baseline; gap: 6px; margin: 0; }
+        .hari { font-size: 14px; font-weight: bold; color: #444; margin: 0; }
+        .tanggal { font-size: 13px; color: #666; margin: 0; }
+        .jam { font-size: 24px; font-weight: bold; color: #0056b3; margin: 2px 0 8px 0; font-variant-numeric: tabular-nums; }
+
+        #video { width: 100%; max-height: 260px; object-fit: cover; border-radius: 8px; transform: scaleX(-1); background: #000; }
+        #map { width: 100%; height: 140px; border-radius: 8px; margin-top: 8px; }
+
+        input[type="text"] { width: 100%; padding: 8px; font-size: 14px; border-radius: 5px; border: 1px solid #ccc; text-align: center; }
+        .nip-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+        .nip-row input { margin-top: 0; flex: 0 0 40%; min-width: 0; }
+        #infoNama { font-size: 12px; font-weight: bold; color: #28a745; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; }
+        button { flex: 1; padding: 12px; font-size: 15px; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        #btnCheckIn { background: #28a745; }
+        #btnCheckIn:hover { background: #1e7e34; }
+        #btnCheckOut { background: #dc3545; }
+        #btnCheckOut:hover { background: #b21f2d; }
+        #status { margin-top: 10px; font-weight: bold; color: #333; font-size: 13px; }
+        .dinas-luar { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; font-size: 13px; color: #555; }
+        .dinas-luar input { width: 16px; height: 16px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <img class="logo" src="https://raw.githubusercontent.com/SDMRSIL/logorsil/main/RSIB.png" alt="Logo RSIL">
+        <h1 class="title">ABSENSI</h1>
+
+        <div class="hari-tanggal">
+            <span class="hari" id="hari"></span>
+            <span class="tanggal" id="tanggal"></span>
+        </div>
+        <p class="jam" id="jam"></p>
+
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+
+        <div id="map"></div>
+
+        <div class="nip-row">
+            <input type="text" id="nik" placeholder="Masukkan NIP/NRP">
+            <span id="infoNama"></span>
+        </div>
+
+        <div class="dinas-luar">
+            <input type="checkbox" id="dinasLuar">
+            <label for="dinasLuar">Dinas Luar</label>
+        </div>
+
+        <div class="btn-group">
+            <button id="btnCheckIn" onclick="prosesAbsen('Masuk')">Check In</button>
+            <button id="btnCheckOut" onclick="prosesAbsen('Pulang')">Check Out</button>
+        </div>
+
+        <p id="status"></p>
+    </div>
+
+    <script>
+        // ==========================================
+        // GANTI DENGAN URL & KEY SUPABASE ANDA
+        // ==========================================
+        const supabaseUrl = 'https://ukjwvnutxpkyepbwvfix.supabase.co';
+        const supabaseKey = 'sb_publishable_9h2W6Lm4gN51dbflE81N5g_RM3FTyfG';
+        const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        // ===== Jam, Hari, Tanggal real-time =====
+        const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
+
+        function updateWaktu() {
+            const now = new Date();
+            document.getElementById('hari').innerText = namaHari[now.getDay()];
+
+            const dd = String(now.getDate()).padStart(2, '0');
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const yyyy = now.getFullYear();
+            document.getElementById('tanggal').innerText = `${dd}/${mm}/${yyyy}`;
+
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mi = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('jam').innerText = `${hh}:${mi}:${ss}`;
+        }
+        updateWaktu();
+        setInterval(updateWaktu, 1000);
+
+        // ===== Titik lokasi RSIL & toleransi radius =====
+        const LOKASI_RSIL = { lat: -8.13402731459188, lng: 113.21988578885794 };
+        const RADIUS_TOLERANSI_METER = 200;
+
+        // Hitung jarak antar 2 koordinat (meter) pakai rumus Haversine
+        function hitungJarak(lat1, lng1, lat2, lng2) {
+            const R = 6371000; // radius bumi dalam meter
+            const toRad = (deg) => deg * Math.PI / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLng = toRad(lng2 - lng1);
+            const a = Math.sin(dLat / 2) ** 2 +
+                      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                      Math.sin(dLng / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        let map, marker;
+
+        // Inisialisasi Peta
+        function initMap(lat, lng) {
+            if (!map) {
+                map = L.map('map').setView([lat, lng], 17);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
+                marker = L.marker([lat, lng]).addTo(map);
+            } else {
+                map.setView([lat, lng], 17);
+                marker.setLatLng([lat, lng]);
+            }
+        }
+
+        // Menyalakan Kamera Depan Otomatis (resolusi diperkecil supaya lebih cepat terbuka)
+        async function setupKamera() {
+            const status = document.getElementById('status');
+            status.innerText = "Membuka kamera...";
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "user",
+                        width: { ideal: 480 },
+                        height: { ideal: 640 }
+                    },
+                    audio: false
+                });
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    status.innerText = "";
+                };
+            } catch (err) {
+                status.innerText = "";
+                alert("Gagal membuka kamera: " + err.message);
+            }
+        }
+        setupKamera();
+
+        // Ambil lokasi awal untuk menampilkan peta saat halaman dibuka
+        function tampilkanLokasiAwal() {
+            if (!navigator.geolocation) return;
+            navigator.geolocation.getCurrentPosition((position) => {
+                initMap(position.coords.latitude, position.coords.longitude);
+            }, () => {}, { enableHighAccuracy: true });
+        }
+        tampilkanLokasiAwal();
+
+        let namaTerverifikasi = null; // diisi hanya jika NIP ditemukan di tabel karyawan
+
+        // Cek NIP ke tabel 'karyawan', tampilkan nama jika ditemukan
+        async function cekNIP() {
+            const nik = document.getElementById('nik').value.trim();
+            const info = document.getElementById('infoNama');
+            namaTerverifikasi = null;
+            info.style.color = '#28a745';
+
+            if (!nik) {
+                info.innerText = '';
+                return;
+            }
+
+            info.style.color = '#666';
+            info.innerText = 'Memeriksa NIP...';
+
+            const { data, error } = await supabaseClient
+                .from('karyawan')
+                .select('nama')
+                .eq('nik', nik)
+                .maybeSingle();
+
+            if (error || !data) {
+                info.style.color = '#dc3545';
+                info.innerText = 'NIP tidak terdaftar. Absen tidak dapat dilakukan.';
+                return;
+            }
+
+            namaTerverifikasi = data.nama;
+            info.style.color = '#28a745';
+            info.innerText = data.nama;
+            info.title = data.nama;
+            info.onclick = () => alert(data.nama);
+        }
+
+        document.getElementById('nik').addEventListener('blur', cekNIP);
+        document.getElementById('nik').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') cekNIP();
+        });
+
+        // Ambil snapshot dari video + tambahkan watermark nama/NIK/waktu, kembalikan sebagai Blob (JPEG)
+        function ambilSnapshot(nama, nik) {
+            return new Promise((resolve) => {
+                const video = document.getElementById('video');
+                const canvas = document.getElementById('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                // Balik gambar karena preview video di-mirror (scaleX(-1))
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                // Kembalikan transform normal supaya teks watermark tidak ikut terbalik
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+                // ===== Watermark: nama, NIK, dan timestamp =====
+                const now = new Date();
+                const tgl = String(now.getDate()).padStart(2, '0') + '/' +
+                            String(now.getMonth() + 1).padStart(2, '0') + '/' +
+                            now.getFullYear();
+                const jam = String(now.getHours()).padStart(2, '0') + ':' +
+                            String(now.getMinutes()).padStart(2, '0') + ':' +
+                            String(now.getSeconds()).padStart(2, '0');
+
+                const baris = [
+                    `${nama || '-'} (${nik || '-'})`,
+                    `${tgl} ${jam}`
+                ];
+
+                const fontSize = Math.max(14, Math.round(canvas.width * 0.035));
+                ctx.font = `bold ${fontSize}px Arial`;
+                ctx.textBaseline = 'bottom';
+
+                const paddingX = 10;
+                const lineHeight = fontSize * 13 / 10;
+                const boxHeight = (lineHeight * baris.length) + 12;
+
+                // Latar semi-transparan di bawah foto supaya teks terbaca
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, canvas.height - boxHeight, canvas.width, boxHeight);
+
+                ctx.fillStyle = '#ffffff';
+                baris.forEach((teks, i) => {
+                    const y = canvas.height - 8 - (lineHeight * (baris.length - 1 - i));
+                    ctx.fillText(teks, paddingX, y);
+                });
+
+                canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.85);
+            });
+        }
+
+        // Upload foto ke Supabase Storage, kembalikan public URL (atau null jika gagal)
+        async function uploadFoto(nama, nik, tipe) {
+            const blob = await ambilSnapshot(nama, nik);
+            if (!blob) return null;
+
+            const namaFile = `${nik}_${tipe}_${Date.now()}.jpg`;
+            const { data, error } = await supabaseClient
+                .storage
+                .from('foto-absensi')
+                .upload(namaFile, blob, { contentType: 'image/jpeg' });
+
+            if (error) {
+                console.error('Gagal upload foto:', error.message);
+                return null;
+            }
+
+            const { data: urlData } = supabaseClient
+                .storage
+                .from('foto-absensi')
+                .getPublicUrl(namaFile);
+
+            return urlData.publicUrl;
+        }
+
+        // Fungsi Tombol Absen (dipakai untuk Check In maupun Check Out)
+        async function prosesAbsen(tipe) {
+            const nik = document.getElementById('nik').value.trim();
+            const status = document.getElementById('status');
+
+            if (!nik) {
+                alert("Mohon masukkan NIP/NRP Anda terlebih dahulu!");
+                return;
+            }
+
+            // Pastikan NIP sudah dicek dan ditemukan di tabel karyawan
+            if (namaTerverifikasi === null) {
+                await cekNIP();
+                if (namaTerverifikasi === null) {
+                    status.innerText = "NIP tidak terdaftar. Absen tidak dapat dilakukan.";
+                    return;
+                }
+            }
+            const nama = namaTerverifikasi;
+
+            status.innerText = "Mendeteksi lokasi GPS...";
+
+            if (!navigator.geolocation) {
+                status.innerText = "Browser tidak mendukung Geolocation.";
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const akurasi = position.coords.accuracy;
+
+                initMap(lat, lng);
+
+                if (akurasi > 100) {
+                    status.innerText = "Akurasi GPS terlalu lemah (" + Math.round(akurasi) + "m). Silakan dekat ke area jendela/terbuka.";
+                    return;
+                }
+
+                const dinasLuar = document.getElementById('dinasLuar').checked;
+
+                if (!dinasLuar) {
+                    const jarak = hitungJarak(lat, lng, LOKASI_RSIL.lat, LOKASI_RSIL.lng);
+                    if (jarak > RADIUS_TOLERANSI_METER) {
+                        status.innerText = "Anda berada " + Math.round(jarak) + "m dari lokasi RSIL (maks " + RADIUS_TOLERANSI_METER + "m). Jika sedang dinas luar, centang kotak 'Dinas Luar'.";
+                        return;
+                    }
+                }
+
+                status.innerText = "Mengunggah foto...";
+                const fotoUrl = await uploadFoto(nama, nik, tipe);
+
+                status.innerText = "Menyimpan data ke database...";
+
+                const { data, error } = await supabaseClient
+                    .from('log_absensi')
+                    .insert([{
+                        nik: nik,
+                        nama: nama,
+                        lat: lat,
+                        long: lng,
+                        tipe_absen: tipe,
+                        foto_url: fotoUrl,
+                        dinas_luar: dinasLuar
+                    }]);
+
+                if (error) {
+                    status.innerText = "Gagal: " + error.message;
+                } else {
+                    status.innerText = "Berhasil! " + (tipe === 'Masuk' ? 'Check In' : 'Check Out') + " Anda tercatat.";
+                }
+            }, (error) => {
+                status.innerText = "Gagal mendapatkan lokasi. Pastikan GPS aktif.";
+            }, { enableHighAccuracy: true });
+        }
+    </script>
+</body>
+</html>

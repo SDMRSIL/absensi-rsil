@@ -99,14 +99,18 @@
                 <table id="tabelLaporan" style="display:none;">
                     <thead>
                         <tr>
+                            <th>ID</th>
                             <th>Tanggal</th>
-                            <th>Jam</th>
                             <th>Nama</th>
                             <th>NIP</th>
-                            <th>Tipe</th>
-                            <th>Dinas Luar</th>
-                            <th>Lokasi</th>
-                            <th>Foto</th>
+                            <th>Jam Masuk</th>
+                            <th>Foto Masuk</th>
+                            <th>Lokasi Masuk</th>
+                            <th>Dinas Luar (Masuk)</th>
+                            <th>Jam Pulang</th>
+                            <th>Foto Pulang</th>
+                            <th>Lokasi Pulang</th>
+                            <th>Dinas Luar (Pulang)</th>
                         </tr>
                     </thead>
                     <tbody id="isiTabel"></tbody>
@@ -117,7 +121,7 @@
 
     <script>
         // ==========================================
-        // GANTI DENGAN URL & KEY SUPABASE
+        // GANTI DENGAN URL & KEY SUPABASE ANDA SENDIRI
         // ==========================================
         const supabaseUrl = 'https://ukjwvnutxpkyepbwvfix.supabase.co';
         const supabaseKey = 'sb_publishable_9h2W6Lm4gN51dbflE81N5g_RM3FTyfG';
@@ -126,7 +130,7 @@
         // ==========================================
         // GANTI PASSWORD AKSES LAPORAN DI SINI
         // ==========================================
-        const PASSWORD_AKSES = 'sdm12345';
+        const PASSWORD_AKSES = 'sdmrsil2026';
 
         let dataLaporan = [];
 
@@ -199,36 +203,81 @@
             tabel.style.display = 'table';
         }
 
-        function tampilkanTabel(data) {
+        // Kelompokkan data mentah (1 baris = 1 kejadian Masuk/Pulang) menjadi
+        // 1 baris per pegawai per hari, dengan kolom Masuk & Pulang terpisah.
+        function gabungGrupPerHari(data) {
+            const grup = {}; // key: "tanggal_nik" -> objek gabungan
+
+            data.forEach(row => {
+                const { tgl } = formatWaktuWIB(row.waktu);
+                const tglKey = tgl.split('/').reverse().join('-'); // DD/MM/YYYY -> YYYY-MM-DD untuk key konsisten
+                const key = tglKey + '_' + (row.nik || '-');
+
+                if (!grup[key]) {
+                    grup[key] = {
+                        id: tglKey + '_' + (row.nik || '-'),
+                        tanggal: tgl,
+                        nama: row.nama || '-',
+                        nik: row.nik || '-',
+                        masuk: null,
+                        pulang: null
+                    };
+                }
+
+                const { jam } = formatWaktuWIB(row.waktu);
+                const detail = {
+                    jam, foto_url: row.foto_url, lat: row.lat, long: row.long, dinas_luar: row.dinas_luar
+                };
+
+                if (row.tipe_absen === 'Masuk') {
+                    grup[key].masuk = detail;
+                } else {
+                    grup[key].pulang = detail;
+                }
+            });
+
+            // Urutkan hasil gabungan dari tanggal terbaru
+            return Object.values(grup).sort((a, b) => b.id.localeCompare(a.id));
+        }
+
+        function buatLinkFoto(url) {
+            return url ? `<a class="foto-link" href="${url}" target="_blank">Lihat Foto</a>` : '-';
+        }
+
+        function buatLinkLokasi(lat, long) {
+            return (lat && long) ? `<a class="foto-link" href="https://www.google.com/maps?q=${lat},${long}" target="_blank">Lihat Peta</a>` : '-';
+        }
+
+        function buatBadgeDinas(dinasLuar) {
+            return dinasLuar ? '<span class="badge-dinas">Dinas Luar</span>' : '-';
+        }
+
+        function tampilkanTabel(dataMentah) {
+            const data = gabungGrupPerHari(dataMentah);
             const isiTabel = document.getElementById('isiTabel');
             const info = document.getElementById('infoJumlah');
             isiTabel.innerHTML = '';
 
-            info.innerText = `Menampilkan ${data.length} data`;
+            info.innerText = `Menampilkan ${data.length} baris (${dataMentah.length} kejadian absen)`;
 
             data.forEach(row => {
-                const { tgl, jam } = formatWaktuWIB(row.waktu);
                 const tr = document.createElement('tr');
-
-                const tipeClass = row.tipe_absen === 'Masuk' ? 'badge-masuk' : 'badge-pulang';
-                const tipeLabel = row.tipe_absen === 'Masuk' ? 'Check In' : 'Check Out';
-                const dinasLabel = row.dinas_luar ? '<span class="badge-dinas">Dinas Luar</span>' : '-';
-                const lokasiLink = (row.lat && row.long)
-                    ? `<a class="foto-link" href="https://www.google.com/maps?q=${row.lat},${row.long}" target="_blank">Lihat Peta</a>`
-                    : '-';
-                const fotoLink = row.foto_url
-                    ? `<a class="foto-link" href="${row.foto_url}" target="_blank">Lihat Foto</a>`
-                    : '-';
+                const m = row.masuk;
+                const p = row.pulang;
 
                 tr.innerHTML = `
-                    <td>${tgl}</td>
-                    <td>${jam}</td>
-                    <td>${row.nama || '-'}</td>
-                    <td>${row.nik || '-'}</td>
-                    <td class="${tipeClass}">${tipeLabel}</td>
-                    <td>${dinasLabel}</td>
-                    <td>${lokasiLink}</td>
-                    <td>${fotoLink}</td>
+                    <td>${row.id}</td>
+                    <td>${row.tanggal}</td>
+                    <td>${row.nama}</td>
+                    <td>${row.nik}</td>
+                    <td class="badge-masuk">${m ? m.jam : '-'}</td>
+                    <td>${m ? buatLinkFoto(m.foto_url) : '-'}</td>
+                    <td>${m ? buatLinkLokasi(m.lat, m.long) : '-'}</td>
+                    <td>${m ? buatBadgeDinas(m.dinas_luar) : '-'}</td>
+                    <td class="badge-pulang">${p ? p.jam : '-'}</td>
+                    <td>${p ? buatLinkFoto(p.foto_url) : '-'}</td>
+                    <td>${p ? buatLinkLokasi(p.lat, p.long) : '-'}</td>
+                    <td>${p ? buatBadgeDinas(p.dinas_luar) : '-'}</td>
                 `;
                 isiTabel.appendChild(tr);
             });
@@ -249,14 +298,16 @@
                 return;
             }
 
-            const header = ['Tanggal', 'Jam', 'Nama', 'NIP', 'Tipe Absen', 'Dinas Luar', 'Latitude', 'Longitude', 'URL Foto'];
-            const baris = dataLaporan.map(row => {
-                const { tgl, jam } = formatWaktuWIB(row.waktu);
-                const tipeLabel = row.tipe_absen === 'Masuk' ? 'Check In' : 'Check Out';
+            const dataGabung = gabungGrupPerHari(dataLaporan);
+
+            const header = ['ID', 'Tanggal', 'Nama', 'NIP', 'Jam Masuk', 'Dinas Luar (Masuk)', 'Lat Masuk', 'Long Masuk', 'URL Foto Masuk', 'Jam Pulang', 'Dinas Luar (Pulang)', 'Lat Pulang', 'Long Pulang', 'URL Foto Pulang'];
+            const baris = dataGabung.map(row => {
+                const m = row.masuk;
+                const p = row.pulang;
                 return [
-                    tgl, jam, row.nama || '', row.nik || '', tipeLabel,
-                    row.dinas_luar ? 'Ya' : 'Tidak',
-                    row.lat || '', row.long || '', row.foto_url || ''
+                    row.id, row.tanggal, row.nama, row.nik,
+                    m ? m.jam : '', m && m.dinas_luar ? 'Ya' : (m ? 'Tidak' : ''), m ? m.lat : '', m ? m.long : '', m ? (m.foto_url || '') : '',
+                    p ? p.jam : '', p && p.dinas_luar ? 'Ya' : (p ? 'Tidak' : ''), p ? p.lat : '', p ? p.long : '', p ? (p.foto_url || '') : ''
                 ];
             });
 

@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Absensi RSI</title>
     <!-- Supabase Client Library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -62,13 +65,13 @@
         <div id="map"></div>
 
         <div class="nip-row">
-            <input type="text" id="nik" placeholder="Masukkan NIP">
+            <input type="text" id="nik" placeholder="Masukkan NIP/NRP">
             <span id="infoNama"></span>
         </div>
 
         <div class="btn-group">
-            <button id="btnCheckIn" onclick="prosesAbsen('Masuk')">ABSEN MASUK</button>
-            <button id="btnCheckOut" onclick="prosesAbsen('Pulang')">ABSEN PULANG</button>
+            <button id="btnCheckIn" onclick="prosesAbsen('Masuk')">Check In</button>
+            <button id="btnCheckOut" onclick="prosesAbsen('Pulang')">Check Out</button>
         </div>
 
         <p id="status"></p>

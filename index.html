@@ -65,13 +65,13 @@
         <div id="map"></div>
 
         <div class="nip-row">
-            <input type="text" id="nik" placeholder="Masukkan NIP/NRP">
+            <input type="text" id="nik" placeholder="Masukkan NRP">
             <span id="infoNama"></span>
         </div>
 
         <div class="btn-group">
-            <button id="btnCheckIn" onclick="prosesAbsen('Masuk')">Check In</button>
-            <button id="btnCheckOut" onclick="prosesAbsen('Pulang')">Check Out</button>
+            <button id="btnCheckIn" onclick="prosesAbsen('Masuk')">ABSEN MASUK</button>
+            <button id="btnCheckOut" onclick="prosesAbsen('Pulang')">ABSEN PULANG</button>
         </div>
 
         <p id="status"></p>
@@ -86,7 +86,7 @@
         const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
         // ===== Jam, Hari, Tanggal real-time =====
-        const namaHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
+        const namaHari = ['Ahad', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jum'at", 'Sabtu'];
 
         function updateWaktu() {
             const now = new Date();

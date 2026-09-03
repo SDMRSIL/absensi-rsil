@@ -79,8 +79,8 @@
                     <input type="date" id="fSampaiTanggal">
                 </div>
                 <div class="filter-item">
-                    <label>NIP</label>
-                    <input type="text" id="fNik" placeholder="Cari NIP...">
+                    <label>NRP</label>
+                    <input type="text" id="fNik" placeholder="Cari NRP...">
                 </div>
                 <div class="filter-item">
                     <label>Nama</label>
@@ -102,14 +102,14 @@
                             <th>ID</th>
                             <th>Tanggal</th>
                             <th>Nama</th>
-                            <th>NIP</th>
+                            <th>NRP</th>
                             <th>Jam Masuk</th>
-                            <th>Foto Masuk</th>
-                            <th>Lokasi Masuk</th>
-                            <th>Dinas Luar (Masuk)</th>
                             <th>Jam Pulang</th>
+                            <th>Foto Masuk</th>
                             <th>Foto Pulang</th>
+                            <th>Lokasi Masuk</th>
                             <th>Lokasi Pulang</th>
+                            <th>Dinas Luar (Masuk)</th>
                             <th>Dinas Luar (Pulang)</th>
                         </tr>
                     </thead>
@@ -130,7 +130,7 @@
         // ==========================================
         // GANTI PASSWORD AKSES LAPORAN DI SINI
         // ==========================================
-        const PASSWORD_AKSES = 'sdm12345';
+        const PASSWORD_AKSES = 'sdmrsil2026';
 
         let dataLaporan = [];
 
@@ -271,12 +271,12 @@
                     <td>${row.nama}</td>
                     <td>${row.nik}</td>
                     <td class="badge-masuk">${m ? m.jam : '-'}</td>
-                    <td>${m ? buatLinkFoto(m.foto_url) : '-'}</td>
-                    <td>${m ? buatLinkLokasi(m.lat, m.long) : '-'}</td>
-                    <td>${m ? buatBadgeDinas(m.dinas_luar) : '-'}</td>
                     <td class="badge-pulang">${p ? p.jam : '-'}</td>
+                    <td>${m ? buatLinkFoto(m.foto_url) : '-'}</td>
                     <td>${p ? buatLinkFoto(p.foto_url) : '-'}</td>
+                    <td>${m ? buatLinkLokasi(m.lat, m.long) : '-'}</td>
                     <td>${p ? buatLinkLokasi(p.lat, p.long) : '-'}</td>
+                    <td>${m ? buatBadgeDinas(m.dinas_luar) : '-'}</td>
                     <td>${p ? buatBadgeDinas(p.dinas_luar) : '-'}</td>
                 `;
                 isiTabel.appendChild(tr);
@@ -300,14 +300,16 @@
 
             const dataGabung = gabungGrupPerHari(dataLaporan);
 
-            const header = ['ID', 'Tanggal', 'Nama', 'NIP', 'Jam Masuk', 'Dinas Luar (Masuk)', 'Lat Masuk', 'Long Masuk', 'URL Foto Masuk', 'Jam Pulang', 'Dinas Luar (Pulang)', 'Lat Pulang', 'Long Pulang', 'URL Foto Pulang'];
+            const header = ['ID', 'Tanggal', 'Nama', 'NRP', 'Jam Masuk', 'Jam Pulang', 'URL Foto Masuk', 'URL Foto Pulang', 'Lat Masuk', 'Long Masuk', 'Lat Pulang', 'Long Pulang', 'Dinas Luar (Masuk)', 'Dinas Luar (Pulang)'];
             const baris = dataGabung.map(row => {
                 const m = row.masuk;
                 const p = row.pulang;
                 return [
                     row.id, row.tanggal, row.nama, row.nik,
-                    m ? m.jam : '', m && m.dinas_luar ? 'Ya' : (m ? 'Tidak' : ''), m ? m.lat : '', m ? m.long : '', m ? (m.foto_url || '') : '',
-                    p ? p.jam : '', p && p.dinas_luar ? 'Ya' : (p ? 'Tidak' : ''), p ? p.lat : '', p ? p.long : '', p ? (p.foto_url || '') : ''
+                    m ? m.jam : '', p ? p.jam : '',
+                    m ? (m.foto_url || '') : '', p ? (p.foto_url || '') : '',
+                    m ? m.lat : '', m ? m.long : '', p ? p.lat : '', p ? p.long : '',
+                    m && m.dinas_luar ? 'Ya' : (m ? 'Tidak' : ''), p && p.dinas_luar ? 'Ya' : (p ? 'Tidak' : '')
                 ];
             });
 
